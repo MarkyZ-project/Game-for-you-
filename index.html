@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cat Brick Breaker ❤️</title>
+<style>
+    body {
+        margin: 0;
+        background: #111;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: sans-serif;
+        color: white;
+        overflow: hidden;
+    }
+    canvas {
+        display: none; /* nascosto all’inizio */
+        background: #000;
+        border: 2px solid white;
+        touch-action: none;
+    }
+    #startScreen {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+    }
+    button {
+        margin: 10px;
+        padding: 10px 20px;
+        font-size: 18px;
+        cursor: pointer;
+        border-radius: 8px;
+        border: none;
+        background: #f5cfa0;
+        color: #111;
+    }
+
+
+
+    label {
+        margin: 10px;
+        font-size: 16px;
+    }
+  #levelComplete {
+    display: none;       /* nascosto all’inizio */
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.85);
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    font-size: 60px;
+    cursor: pointer;
+    color: white;
+    text-align: center;
+    animation: fadeIn 1s;
+}
+
+    #loveMessage {
+        display:none;
+        position:absolute;
+        top:50%;
+        left:50%;
+        transform:translate(-50%, -50%);
+        font-size:40px;
+        color:#ff4081;
+        font-weight:bold;
+        text-align:center;
+    }
+    @keyframes fadeIn {
+        from {opacity:0;}
+        to {opacity:1;}
+    }
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+    <h1>Cat Brick Breaker ❤️</h1>
+    <p>Click START to play</p>
+    <label>
+        <input type="checkbox" id="audioToggle" checked>
+        Audio On
+    </label>
+    <button id="startBtn">START</button>
+</div>
+
+<canvas id="game" width="360" height="600"></canvas>
+
+<div id="levelComplete">💩</div>
+<div id="loveMessage">TI AMO ❤️</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let gamePaused = false; // indica se il gioco è fermo
+
+
+/* 🔊 SUONO GATTO */
+const meowSound = new Audio("meow.mp3");
+meowSound.volume = 0.7;
+let audioEnabled = false;
+
+// PADDLE
+let paddle = {
+    w: 80,
+    h: 12,
+    x: canvas.width / 2 - 40,
+    y: canvas.height - 30
+};
+
+// BALL leggermente più lenta
+let ball = {
+    x: canvas.width / 2,
+    y: canvas.height - 50,
+    r: 10,
+    dx: 2,
+    dy: -2
+};
+
+// IMMAGINI MATTONI
+const brickImages = [
+    "images/img1.png.webp",
+    "images/img2.png.webp",
+    "images/img3.png.webp",
+    "images/img4.png.webp",
+    "images/img5.png.webp",
+    "images/img6.png.webp",
+    "images/img7.png.webp",
+    "images/img8.png.webp",
+    "images/img9.png.webp",
+    "images/img10.png.webp",
+    "images/img11.png.webp",
+    "images/img12.png.webp"
+];
+
+// MATTONI
+const rows = 4;
+const cols = 5;
+const brickW = 60;
+const brickH = 40;
+const padding = 10;
+const offsetTop = 40;
+const offsetLeft = 15;
+
+let bricks = [];
+
+function createBricks() {
+    bricks = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const img = new Image();
+            img.src = brickImages[(r + c) % brickImages.length];
+            bricks.push({
+                x: offsetLeft + c * (brickW + padding),
+                y: offsetTop + r * (brickH + padding),
+                w: brickW,
+                h: brickH,
+                img: img,
+                alive: true
+            });
+        }
+    }
+}
+createBricks();
+
+/* TOUCH + MOUSE */
+canvas.addEventListener("touchmove", e => {
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    paddle.x = touch.clientX - rect.left - paddle.w / 2;
+});
+canvas.addEventListener("mousemove", e => {
+    const rect = canvas.getBoundingClientRect();
+    paddle.x = e.clientX - rect.left - paddle.w / 2;
+});
+
+/* 🐱 DISEGNA GATTO */
+function drawPaddle() {
+    const x = paddle.x;
+    const y = paddle.y;
+    const w = paddle.w;
+
+    ctx.fillStyle = "#f5cfa0";
+
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, y + 6, w / 2, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y - 6, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(x + w / 2 - 6, y - 12);
+    ctx.lineTo(x + w / 2 - 2, y - 18);
+    ctx.lineTo(x + w / 2 + 2, y - 12);
+    ctx.moveTo(x + w / 2 + 6, y - 12);
+    ctx.lineTo(x + w / 2 + 2, y - 18);
+    ctx.lineTo(x + w / 2 - 2, y - 12);
+    ctx.fill();
+
+    ctx.fillStyle = "black";
+    ctx.beginPath();
+    ctx.arc(x + w / 2 - 3, y - 6, 1.5, 0, Math.PI * 2);
+    ctx.arc(x + w / 2 + 3, y - 6, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = "#f5cfa0";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + w - 4, y + 6);
+    ctx.lineTo(x + w + 10, y);
+    ctx.stroke();
+}
+
+/* ❤️ DISEGNA CUORE */
+function drawBall() {
+    ctx.font = "24px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("❤️", ball.x, ball.y);
+}
+
+/* 🧱 DISEGNA MATTONI */
+function drawBricks() {
+    bricks.forEach(b => {
+        if (b.alive) {
+            ctx.drawImage(b.img, b.x, b.y, b.w, b.h);
+        }
+    });
+}
+
+/* COLLISIONI */
+function collision() {
+    // paddle
+    if (
+        ball.x > paddle.x &&
+        ball.x < paddle.x + paddle.w &&
+        ball.y + ball.r > paddle.y
+    ) {
+        ball.dy = -ball.dy;
+    }
+
+    // mattoni
+    bricks.forEach(b => {
+        if (
+            b.alive &&
+            ball.x > b.x &&
+            ball.x < b.x + b.w &&
+            ball.y > b.y &&
+            ball.y < b.y + b.h
+        ) {
+            ball.dy = -ball.dy;
+            b.alive = false;
+
+            if(audioEnabled){
+                meowSound.currentTime = 0;
+                meowSound.play();
+            }
+        }
+    });
+}
+
+/* VERIFICA FINE LIVELLO */
+function checkLevelComplete() {
+    const allDead = bricks.every(b => !b.alive);
+    if(allDead){
+        cancelAnimationFrame(updateId); // ferma l'update
+        gamePaused = true;              // ferma la palla
+        document.getElementById("levelComplete").style.display = "flex";
+       showLoveMessage();
+ 
+    }
+}
+
+
+/* UPDATE */
+let updateId;
+function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawBricks();
+    drawPaddle();
+    drawBall();
+
+if(!gamePaused){
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+}
+
+
+    if (ball.x < ball.r || ball.x > canvas.width - ball.r) ball.dx *= -1;
+    if (ball.y < ball.r) ball.dy *= -1;
+
+    if (ball.y > canvas.height) {
+        alert("Game Over 😢");
+        location.reload();
+    }
+
+    collision();
+    checkLevelComplete();
+
+    updateId = requestAnimationFrame(update);
+}
+
+/* 🎬 SCHERMATA INIZIALE */
+const startScreen = document.getElementById("startScreen");
+const startBtn = document.getElementById("startBtn");
+const audioToggle = document.getElementById("audioToggle");
+const levelComplete = document.getElementById("levelComplete");
+const loveMessage = document.getElementById("loveMessage");
+
+startBtn.addEventListener("click", () => {
+    startScreen.style.display = "none";
+    canvas.style.display = "block";
+
+    audioEnabled = audioToggle.checked;
+
+    if(audioEnabled){
+        meowSound.play().then(()=>{ 
+            meowSound.pause();
+            meowSound.currentTime = 0;
+        }).catch(e=>console.log(e));
+    }
+
+    update();
+});
+
+function showLoveMessage() {
+    const love = document.getElementById("loveMessage");
+    love.style.display = "block";
+
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const safeWidth = 500;   // larghezza zona centrale da proteggere
+    const safeHeight = 500;  // altezza zona centrale da proteggere
+
+    // IMMAGINI RANDOM SULLO SFONDO
+    const imageInterval = setInterval(() => {
+        const img = new Image();
+        img.src = brickImages[Math.floor(Math.random() * brickImages.length)];
+        img.style.position = "absolute";
+        img.style.width = "50px";
+        img.style.height = "50px";
+        let x, y;
+
+        // genera posizione finché non è fuori dalla zona centrale
+        do {
+            x = Math.random() * (window.innerWidth - 50);
+            y = Math.random() * (window.innerHeight - 50);
+        } while (
+            x > centerX - safeWidth/2 &&
+            x < centerX + safeWidth/2 &&
+            y > centerY - safeHeight/2 &&
+            y < centerY + safeHeight/2
+        );
+
+        img.style.left = x + "px";
+        img.style.top = y + "px";
+        img.style.pointerEvents = "none";
+        document.body.appendChild(img);
+        setTimeout(() => { img.remove(); }, 2000);
+    }, 300);
+
+    // ferma l'intervallo dopo 5 secondi
+    setTimeout(() => { clearInterval(imageInterval); }, 5000);
+}
+
+
+
+
+
+
+
+/* 💩 CLICK EMOJI → TI AMO */
+levelComplete.addEventListener("click", () => {
+    levelComplete.style.display = "none";
+    loveMessage.style.display = "block"; // mostra TI AMO semplice
+});
+
+
+</script>
+
+</body>
+</html>
